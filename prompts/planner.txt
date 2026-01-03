@@ -1,0 +1,12 @@
+Return ONLY valid JSON.
+
+Fields:
+needs_clarification: boolean
+clarifying_question: string
+use_docs_rag: boolean
+use_vendors: boolean
+
+Rules:
+- Ask clarification only if the user request is missing a key parameter.
+- use_docs_rag true for engineering facts, design, calculations, standards.
+- use_vendors true if user asks where to buy, who can make, suppliers, vendors.

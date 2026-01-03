@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MEAI MVP</title>
+    <link rel="icon" href="/static/favicon.ico" />
+
+    <!-- Markdown + Math rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+      window.MathJax = { tex: { inlineMath: [["$","$"], ["\\(","\\)"]] } };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+      :root{
+        --bg:#0b1220;
+        --panel:#0f1a2e;
+        --panel2:#0c1628;
+        --text:#e7eefc;
+        --muted:#9fb0d1;
+        --line:rgba(255,255,255,.08);
+        --blue:#3b6cff;
+        --purple:#7c4dff;
+        --bubbleA:#2a3448;
+        --bubbleU:#2f5bff;
+        --shadow: 0 10px 30px rgba(0,0,0,.35);
+        --radius:18px;
+      }
+      *{box-sizing:border-box}
+      body{
+        margin:0;
+        background: radial-gradient(1200px 600px at 20% 0%, #13284d 0%, var(--bg) 55%);
+        color:var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      }
+      .topbar{
+        height:72px;
+        display:flex;
+        align-items:center;
+        padding:0 22px;
+        gap:14px;
+        border-bottom:1px solid var(--line);
+        background: linear-gradient(180deg, rgba(10,18,32,.9) 0%, rgba(10,18,32,.6) 100%);
+        position:sticky;
+        top:0;
+        z-index:10;
+        backdrop-filter: blur(10px);
+      }
+      .logo{height:34px;width:auto;}
+      .title{font-size:22px;font-weight:800;letter-spacing:.5px;}
+      .wrap{max-width:1100px;margin:18px auto 40px;padding:0 18px;}
+      .card{
+        background: linear-gradient(180deg, rgba(15,26,46,.92) 0%, rgba(12,22,40,.92) 100%);
+        border:1px solid var(--line);
+        border-radius:22px;
+        box-shadow:var(--shadow);
+        overflow:hidden;
+      }
+      .chat{
+        height:62vh;
+        min-height:420px;
+        padding:18px;
+        overflow:auto;
+      }
+      .bubble-row{display:flex;margin:10px 0;}
+      .bubble-row.assistant{justify-content:flex-start;}
+      .bubble-row.user{justify-content:flex-end;}
+
+      .bubble{
+        max-width:min(760px, 86%);
+        padding:12px 14px;
+        border-radius:var(--radius);
+        line-height:1.35;
+        font-size:15px;
+        border:1px solid rgba(255,255,255,.08);
+      }
+      .bubble.assistant{
+        background:rgba(42,52,72,.92);
+        border-top-left-radius:8px;
+      }
+      .bubble.user{
+        background:rgba(47,91,255,.92);
+        color:white;
+        border-top-right-radius:8px;
+      }
+      .bubble.pending{
+        opacity:.8;
+        font-style:italic;
+      }
+
+      .bubble .md strong{font-weight:800;}
+      .bubble .md ul{margin:8px 0 0 20px;}
+
+      .citations{
+        margin-top:10px;
+        padding-top:8px;
+        border-top:1px solid rgba(255,255,255,.08);
+        font-size:12px;
+        color:var(--muted);
+      }
+
+      .controls{
+        padding:14px 16px 16px;
+        border-top:1px solid var(--line);
+        display:flex;
+        gap:12px;
+        align-items:center;
+        flex-wrap:wrap;
+      }
+      .btn{
+        padding:10px 12px;
+        border-radius:12px;
+        border:1px solid rgba(255,255,255,.10);
+        background:rgba(255,255,255,.06);
+        color:var(--text);
+        cursor:pointer;
+      }
+      .btn:hover{filter:brightness(1.08);}
+      .btn.danger{
+        background:rgba(255,255,255,.04);
+        border-color:rgba(255,255,255,.14);
+      }
+
+      .composer{
+        width:100%;
+        display:flex;
+        gap:12px;
+        align-items:flex-end;
+      }
+      textarea{
+        flex:1;
+        min-height:56px;
+        max-height:160px;
+        resize:vertical;
+        padding:14px;
+        border-radius:14px;
+        border:2px solid rgba(59,108,255,.55);
+        background:rgba(0,0,0,.15);
+        color:var(--text);
+      }
+      textarea:focus{
+        border-color:rgba(59,108,255,.9);
+        box-shadow:0 0 0 4px rgba(59,108,255,.18);
+        outline:none;
+      }
+      .send{
+        padding:14px 18px;
+        border-radius:14px;
+        background:rgba(124,77,255,.95);
+        color:white;
+        font-weight:700;
+        border:1px solid rgba(124,77,255,.35);
+        cursor:pointer;
+      }
+
+      .footer{
+        padding:0 16px 14px;
+        font-size:12px;
+        color:var(--muted);
+        display:flex;
+        gap:10px;
+        align-items:center;
+        flex-wrap:wrap;
+      }
+      .kbd{
+        padding:2px 8px;
+        border-radius:999px;
+        background:rgba(255,255,255,.06);
+        border:1px solid rgba(255,255,255,.08);
+      }
+      .spacer{flex:1;}
+    </style>
+  </head>
+
+  <body>
+    <div class="topbar">
+      <img class="logo" src="/assets/Hardware%20Hub%20Logo,%20Full,%20Flat.png" />
+      <div class="title">MEAI MVP</div>
+    </div>
+
+    <div class="wrap">
+      <div class="card">
+        <div id="chat" class="chat"></div>
+
+        <div class="controls">
+          <button
+            id="downloadNotesBtn"
+            class="btn"
+            title="Downloads the evolving engineering decision log for this product: assumptions, requirements, equations, risks, and next steps."
+          >
+            Download engineering notes
+          </button>
+
+          <button
+            id="clearChatBtn"
+            class="btn danger"
+            title="Clears the conversation and starts a brand new product session."
+          >
+            New Chat
+          </button>
+
+          <div class="composer">
+            <textarea
+              id="userInput"
+              placeholder="Type here. Enter sends. Shift+Enter adds a new line."
+            ></textarea>
+            <button id="sendBtn" class="send">Send</button>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div>Session: <span id="sessionId"></span></div>
+          <div class="spacer"></div>
+          <span class="kbd">Enter</span> send
+          <span class="kbd">Shift+Enter</span> newline
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

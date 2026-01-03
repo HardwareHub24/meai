@@ -1,0 +1,8 @@
+Return ONLY valid JSON with:
+ok: boolean
+issues: array of strings
+
+Check:
+- Output follows the selected mode format
+- No invented numbers, materials, tolerances, or codes
+- Citations appear only when context is used
