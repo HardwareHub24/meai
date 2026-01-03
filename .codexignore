@@ -1,0 +1,30 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Logs and runtime artifacts
+logs/
+*.log
+*.jsonl
+
+# Large or irrelevant assets
+Assets/
+archive/
+
+# OS / editor junk
+.DS_Store
+.vscode/
+.idea/
+
+# PDFs and source documents (ingested separately)
+*.pdf
+*.docx
+
+# Cache / embeddings
+.cache/
