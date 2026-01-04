@@ -3,13 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MEAI MVP</title>
+    <title>ME AI Beta</title>
     <link rel="icon" href="/static/favicon.ico" />
 
     <!-- Markdown + Math rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
-      window.MathJax = { tex: { inlineMath: [["$","$"], ["\\(","\\)"]] } };
+      window.MathJax = {
+        tex: {
+          inlineMath: [["\\(", "\\)"]],
+          displayMath: [["\\[", "\\]"]]
+        }
+      };
     </script>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
@@ -177,7 +182,7 @@
   <body>
     <div class="topbar">
       <img class="logo" src="/assets/Hardware%20Hub%20Logo,%20Full,%20Flat.png" />
-      <div class="title">MEAI MVP</div>
+      <div class="title">ME AI Beta</div>
     </div>
 
     <div class="wrap">

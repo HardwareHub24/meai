@@ -37,13 +37,93 @@ function renderMarkdown(text) {
   return div;
 }
 
+const LATEX_MARKERS = /\\frac|\\int|\\sum|\\cdot|\\Delta|\\left|\\right|_|\\^|\\text|\\sqrt/;
+const MATH_PLACEHOLDERS = {
+  "\\[": "__MJX_LB__",
+  "\\]": "__MJX_RB__",
+  "\\(": "__MJX_LP__",
+  "\\)": "__MJX_RP__",
+};
+
+function convertBracketMath(text) {
+  if (!text) return text;
+  let out = text;
+
+  // Protect existing MathJax delimiters so we don't double-wrap them.
+  Object.entries(MATH_PLACEHOLDERS).forEach(([key, token]) => {
+    out = out.replaceAll(key, token);
+  });
+
+  out = out.replace(/\[([\s\S]*?)\]/g, (m, inner) => {
+    return LATEX_MARKERS.test(inner) ? `\\[${inner}\\]` : m;
+  });
+  out = out.replace(/\(([\s\S]*?)\)/g, (m, inner) => {
+    return LATEX_MARKERS.test(inner) ? `\\(${inner}\\)` : m;
+  });
+
+  // Restore protected delimiters.
+  Object.entries(MATH_PLACEHOLDERS).forEach(([key, token]) => {
+    out = out.replaceAll(token, key);
+  });
+
+  // Preserve backslashes for Markdown escaping of MathJax delimiters.
+  out = out.replace(/\\([\[\]\(\)])/g, "\\\\$1");
+
+  return out;
+}
+
+const typesetQueue = [];
+let typesetTimer = null;
+
+function flushTypesetQueue() {
+  if (!typesetQueue.length) return;
+  if (!window.MathJax || !window.MathJax.typesetPromise) return;
+  const targets = typesetQueue.splice(0);
+  window.MathJax.typesetPromise(targets).catch(() => {});
+}
+
+function scheduleTypesetFlush() {
+  if (typesetTimer) return;
+  typesetTimer = setTimeout(() => {
+    typesetTimer = null;
+    flushTypesetQueue();
+  }, 60);
+}
+
+function queueTypeset(target) {
+  if (!target) return;
+  typesetQueue.push(target);
+
+  if (window.MathJax && window.MathJax.typesetPromise) {
+    scheduleTypesetFlush();
+    return;
+  }
+
+  if (window.MathJax && window.MathJax.startup && window.MathJax.startup.promise) {
+    window.MathJax.startup.promise
+      .then(() => {
+        scheduleTypesetFlush();
+      })
+      .catch(() => {});
+    return;
+  }
+
+  // MathJax not on window yet; retry once it loads.
+  setTimeout(() => {
+    if (window.MathJax && window.MathJax.typesetPromise) {
+      scheduleTypesetFlush();
+    }
+  }, 120);
+}
+
 function addBubble(role, text, citations) {
   const row = document.createElement("div");
   row.className = `bubble-row ${role}`;
 
   const bubble = document.createElement("div");
   bubble.className = `bubble ${role}`;
-  bubble.appendChild(renderMarkdown(text));
+  const safeText = role === "assistant" ? convertBracketMath(text) : text;
+  bubble.appendChild(renderMarkdown(safeText));
 
   // citations (optional)
   if (citations && citations.length) {
@@ -84,9 +164,7 @@ function addBubble(role, text, citations) {
   elChat.appendChild(row);
 
   // math typesetting
-  if (window.MathJax && window.MathJax.typesetPromise) {
-    window.MathJax.typesetPromise([bubble]).catch(() => {});
-  }
+  queueTypeset(bubble);
 
   scrollToBottom();
 }
@@ -134,6 +212,24 @@ async function sendMessage() {
   addThinking();
 
   try {
+    const lower = msg.toLowerCase();
+    if (lower.startsWith("solve:") || lower.startsWith("simplify:")) {
+      const task = lower.startsWith("solve:") ? "solve" : "simplify";
+      const expr = msg.slice(task.length + 1).trim();
+      const res = await fetch("/api/math", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task, expr, var: "x" }),
+      });
+      const raw = await res.text();
+      let data = {};
+      try { data = raw ? JSON.parse(raw) : {}; } catch {}
+      removeThinking();
+      const out = data.result ?? data.error ?? "";
+      addBubble("assistant", out);
+      return;
+    }
+
     const res = await fetch("/api/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

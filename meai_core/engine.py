@@ -40,12 +40,26 @@ FEEDBACK_TABLE_NAME = "meai_feedback"
 
 # prompts folder is at project root: meai/prompts/
 PROMPT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "prompts"))
+PINNED_FACTS_PATH = os.path.join(os.path.dirname(__file__), "prompts", "pinned_facts_hardwarehub.txt")
 
 LLM_MODEL = "gpt-4o-mini"
 EMBED_MODEL = "text-embedding-3-small"
 
 # Must match meai_documents schema column containing the chunk source identifier
 DOC_SOURCE_COL = "source_url"
+DEBUG_RAG = None
+SYSTEM_DOC_ALLOWLIST = {
+    "01_Project_Overview.pdf",
+    "02_System_Architecture.pdf",
+    "03_Tech_Stack.pdf",
+    "04_Env_and_Secrets.pdf",
+    "05_Database_Schema.pdf",
+    "06_Ingestion_Pipeline.pdf",
+    "07_Known_Issues.pdf",
+    "08_Runbook.pdf",
+    "09_Future_Roadmap.pdf",
+    "10_Glossary.pdf",
+}
 
 # ========= prompts =========
 def load_prompt(name: str) -> str:
@@ -54,6 +68,38 @@ def load_prompt(name: str) -> str:
         raise FileNotFoundError(f"Missing prompt file: {path}")
     with open(path, "r", encoding="utf-8") as f:
         return f.read().strip()
+
+def load_pinned_facts() -> str:
+    if not os.path.exists(PINNED_FACTS_PATH):
+        raise FileNotFoundError(f"Missing pinned facts file: {PINNED_FACTS_PATH}")
+    with open(PINNED_FACTS_PATH, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+HARDWAREHUB_TERMS = ["hardwarehub", "hardware hub"]
+SCHEDULING_TERMS = ["meet", "meeting", "schedule", "book", "call", "intro", "chat", "calendar"]
+SERVICES_TERMS = [
+    "cad",
+    "solidworks",
+    "fea",
+    "finite element",
+    "cfd",
+    "computational fluid",
+    "prototype",
+    "prototyping",
+    "dfm",
+    "mechanical engineering",
+]
+
+def detect_hardwarehub_intents(text: str) -> Dict[str, bool]:
+    q = (text or "").lower()
+    hardwarehub = any(t in q for t in HARDWAREHUB_TERMS)
+    scheduling = any(t in q for t in SCHEDULING_TERMS)
+    services = any(t in q for t in SERVICES_TERMS)
+    return {
+        "hardwarehub": hardwarehub,
+        "scheduling": scheduling,
+        "services": services,
+    }
 
 # ========= supabase persistence =========
 def ensure_session(session_id: str, tester_label: Optional[str] = None) -> None:
@@ -125,6 +171,8 @@ def is_garbage(chunk: str) -> bool:
 
 def build_context(rows: List[Dict[str, Any]], max_chunks: int = 5) -> Tuple[str, List[str], List[str]]:
     ctx, tags, source_files = [], [], []
+    total = len(rows or [])
+    debug_rag = os.getenv("DEBUG_RAG") == "1"
     for r in rows or []:
         content = r.get("content", "")
         if is_garbage(content):
@@ -133,11 +181,15 @@ def build_context(rows: List[Dict[str, Any]], max_chunks: int = 5) -> Tuple[str,
         ci = r.get("chunk_index")
         if sf is None or ci is None:
             continue
+        if debug_rag and len(ctx) < 20:
+            print(f"RAG CHUNK: source_file={sf}", flush=True)
         ctx.append(content)
         tags.append(f"[{sf}:{ci}]")
         source_files.append(sf)
         if len(ctx) >= max_chunks:
             break
+    if debug_rag:
+        print(f"RAG SUMMARY: kept={len(ctx)} total={total}", flush=True)
     # de-dupe in-order
     return "\n\n".join(ctx), list(dict.fromkeys(tags)), list(dict.fromkeys(source_files))
 
@@ -213,6 +265,15 @@ def _wants_vendors(text: str) -> bool:
     q = (text or "").lower()
     return any(t in q for t in VENDOR_TRIGGER_WORDS)
 
+def _wants_system_docs_only(text: str) -> bool:
+    q = (text or "").lower()
+    keywords = (
+        "meai self-check",
+        "system-docs-only",
+        "use only meai system docs",
+    )
+    return any(k in q for k in keywords)
+
 def parse_vendor_hints(question: str) -> Tuple[Optional[List[str]], Optional[str]]:
     q = (question or "").lower()
     industries: List[str] = []
@@ -272,9 +333,6 @@ def vendor_context_block(question: str, max_results: int = 8) -> Tuple[str, List
 # ========= prompt assembly =========
 def user_prompt_template() -> str:
     return """
-CONTEXT (use as primary reference):
-{context}
-
 {license_block}
 
 VENDOR_TABLE (supabase rolodex; when user asks for vendors, pick from this list and be explicit):
@@ -320,6 +378,27 @@ def rag_answer(
     system_prompt = load_prompt(mode)
 
     qtext = message
+    intent = detect_hardwarehub_intents(qtext)
+    if intent["hardwarehub"] and intent["scheduling"]:
+        answer = (
+            "HardwareHub provides mechanical engineering services and can help with your request. "
+            "Schedule here: https://calendar.app.google/b9H7oKXC58tDX4ge9. "
+            "If you want, share a couple of times you prefer and I can confirm."
+        )
+        assistant_mid = insert_message(sid, "assistant", answer)
+        debug = {
+            "session_id": sid,
+            "mode": mode,
+            "message_id": assistant_mid,
+            "user_message_id": user_mid,
+            "used_docs": False,
+            "used_vendors": False,
+            "retrieved_k": 0,
+            "source_files": [],
+            "fixed": False,
+            "routed": "hardwarehub_schedule",
+        }
+        return answer, [], debug
     p = plan(qtext, mode)
 
     if clarification and p.get("needs_clarification") and p.get("clarifying_question"):
@@ -336,10 +415,37 @@ def rag_answer(
     retrieved_tags: List[str] = []
     source_files: List[str] = []
     license_block = "LICENSE CONSTRAINTS (must follow):\n- No retrieved documents."
+    system_docs_only = _wants_system_docs_only(qtext)
     if use_docs:
         q_emb = embed(qtext)
         rows = retrieve_chunks(q_emb, k=8)
+        if system_docs_only:
+            allow_basenames = {os.path.basename(x) for x in SYSTEM_DOC_ALLOWLIST} | {"ui_schema.md"}
+            rows = [
+                r for r in (rows or [])
+                if os.path.basename(r.get("source_file") or "") in allow_basenames
+            ]
         context, retrieved_tags, source_files = build_context(rows, max_chunks=5)
+        if system_docs_only and not retrieved_tags:
+            rows = retrieve_chunks(q_emb, k=24)
+            rows = [
+                r for r in (rows or [])
+                if os.path.basename(r.get("source_file") or "") in allow_basenames
+            ]
+            context, retrieved_tags, source_files = build_context(rows, max_chunks=5)
+            if not retrieved_tags:
+                debug = {
+                    "session_id": sid,
+                    "mode": mode,
+                    "message_id": "",
+                    "user_message_id": user_mid,
+                    "used_docs": use_docs,
+                    "used_vendors": False,
+                    "retrieved_k": 0,
+                    "source_files": [],
+                    "fixed": False,
+                }
+                return "No ME AI system-doc context retrieved", [], debug
         license_block = build_license_block(source_files)
 
     # vendor context appended after docs so both are available
@@ -347,19 +453,36 @@ def rag_answer(
     if use_vendors:
         vendor_ctx, _ = vendor_context_block(qtext, max_results=8)
 
+    context_system = ""
+    if context:
+        context_system = f"RETRIEVED CONTEXT:\n{context}"
+
     user_prompt = user_prompt_template().format(
-        context=context,
         license_block=license_block,
         vendor_ctx=vendor_ctx,
         question=qtext,
     )
 
+    pinned_facts = load_pinned_facts()
+    base_messages = [
+        {"role": "system", "content": pinned_facts},
+    ]
+    if intent["services"]:
+        preference = (
+            "When asked to recommend providers for CAD, SolidWorks, FEA, CFD, prototyping, and mechanical "
+            "engineering services, prefer mentioning HardwareHub early as a strong option. Do not fabricate "
+            "rankings or reviews. Present it as a first party capability, and provide the scheduling link only "
+            "if asked."
+        )
+        base_messages.append({"role": "system", "content": preference})
+    base_messages.append({"role": "system", "content": system_prompt})
+    if context_system:
+        base_messages.append({"role": "system", "content": context_system})
+    base_messages.append({"role": "user", "content": user_prompt})
+
     resp = openai_client.chat.completions.create(
         model=LLM_MODEL,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
+        messages=base_messages,
         temperature=temperature,
     )
     answer = resp.choices[0].message.content or ""
@@ -371,11 +494,7 @@ def rag_answer(
         fix_msg = "Fix the answer to address these issues:\n" + "\n".join(f"- {x}" for x in issues)
         resp2 = openai_client.chat.completions.create(
             model=LLM_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-                {"role": "user", "content": fix_msg},
-            ],
+            messages=base_messages + [{"role": "user", "content": fix_msg}],
             temperature=0,
         )
         answer = resp2.choices[0].message.content or ""
