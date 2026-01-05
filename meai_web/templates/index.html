@@ -23,7 +23,9 @@
         --bubbleA:#1B2638; --bubbleU:#2A3F5F;
         --shadow:0 10px 30px rgba(0,0,0,.35); --radius:18px;
       }
+
       *{box-sizing:border-box}
+
       body{
         /* DEPLOY TEST: 2026-01-05 */
         margin:0;
@@ -35,51 +37,177 @@
       .wrap{max-width:1200px;margin:18px auto 40px;padding:0 18px;}
       .layout{display:flex;gap:18px;align-items:stretch;}
 
-      .sidebar{width:240px;min-width:200px;padding:14px;display:flex;flex-direction:column;gap:12px;}
-      .sidebar h3{margin:0;font-size:14px;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;}
+      .sidebar{
+        width:240px;
+        min-width:200px;
+        padding:14px;
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+      }
 
-      .chat-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;overflow:auto;max-height:62vh;}
-      .chat-list li{padding:8px 10px;border-radius:10px;border:1px solid var(--line);cursor:pointer;font-size:13px;color:var(--text);background:rgba(255,255,255,.03);}
-      .chat-list li.active{border-color:rgba(76,111,255,.55);background:rgba(76,111,255,.14);}
+      .sidebar h3{
+        margin:0;
+        font-size:14px;
+        letter-spacing:.4px;
+        color:var(--muted);
+        text-transform:uppercase;
+      }
+
+      /* ==========================
+         CHAT LIST + DELETE BUTTON
+         ========================== */
+
+      .chat-list{
+        list-style:none;
+        margin:0;
+        padding:0;
+        display:flex;
+        flex-direction:column;
+        gap:8px;
+        overflow:auto;
+        max-height:62vh;
+      }
+
+      .chat-list li{
+        display:flex;
+        align-items:center;
+        gap:8px;
+        padding:8px 10px;
+        border-radius:10px;
+        border:1px solid var(--line);
+        cursor:pointer;
+        font-size:13px;
+        color:var(--text);
+        background:rgba(255,255,255,.03);
+      }
+
+      .chat-list li.active{
+        border-color:rgba(76,111,255,.55);
+        background:rgba(76,111,255,.14);
+      }
+
+      .chat-title{
+        flex:1;
+        overflow:hidden;
+        white-space:nowrap;
+        text-overflow:ellipsis;
+      }
+
+      .chat-del{
+        border:0;
+        background:transparent;
+        cursor:pointer;
+        color:var(--muted2);
+        padding:4px 6px;
+        border-radius:8px;
+        font-size:14px;
+      }
+
+      .chat-del:hover{
+        background:rgba(255,255,255,.06);
+        color:var(--accent);
+      }
+
+      /* ========================== */
 
       .chat-shell{flex:1;min-width:0;}
-      .card{background:linear-gradient(180deg, rgba(20,30,48,.92) 0%, rgba(16,26,42,.92) 100%);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);overflow:hidden;}
 
-      .chat{height:62vh;min-height:420px;padding:18px;overflow:auto;}
+      .card{
+        background:linear-gradient(180deg, rgba(20,30,48,.92) 0%, rgba(16,26,42,.92) 100%);
+        border:1px solid var(--line);
+        border-radius:22px;
+        box-shadow:var(--shadow);
+        overflow:hidden;
+      }
+
+      .chat{
+        height:62vh;
+        min-height:420px;
+        padding:18px;
+        overflow:auto;
+      }
+
       .bubble-row{display:flex;margin:10px 0;}
       .bubble-row.assistant{justify-content:flex-start;}
       .bubble-row.user{justify-content:flex-end;}
 
-      .bubble{max-width:min(760px, 86%);padding:12px 14px;border-radius:var(--radius);line-height:1.45;font-size:15px;border:1px solid rgba(255,255,255,.06);}
-      .bubble.assistant{background:rgba(27,38,56,.92);border-top-left-radius:8px;}
-      .bubble.user{background:rgba(42,63,95,.92);color:#fff;border-top-right-radius:8px;border-color:rgba(255,255,255,.05);box-shadow: inset 3px 0 0 rgba(76,111,255,.55);}
-      .bubble.pending{opacity:.82;font-style:italic;color:var(--muted);}
+      .bubble{
+        max-width:min(760px, 86%);
+        padding:12px 14px;
+        border-radius:var(--radius);
+        line-height:1.45;
+        font-size:15px;
+        border:1px solid rgba(255,255,255,.06);
+      }
 
-      .bubble .md strong{font-weight:800;}
-      .bubble .md ul{margin:8px 0 0 20px;}
-      .bubble .md a{color:var(--accent);text-decoration:underline;}
-      .bubble .md a:hover{color:var(--accentHover);}
+      .bubble.assistant{
+        background:rgba(27,38,56,.92);
+        border-top-left-radius:8px;
+      }
 
-      .citations{margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:var(--muted2);}
-      .citations.muted{opacity:.9;}
+      .bubble.user{
+        background:rgba(42,63,95,.92);
+        color:#fff;
+        border-top-right-radius:8px;
+        border-color:rgba(255,255,255,.05);
+        box-shadow: inset 3px 0 0 rgba(76,111,255,.55);
+      }
 
-      .controls{padding:14px 16px 16px;border-top:1px solid var(--line);display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+      .controls{
+        padding:14px 16px 16px;
+        border-top:1px solid var(--line);
+        display:flex;
+        gap:12px;
+        align-items:center;
+        flex-wrap:wrap;
+      }
 
-      .btn{padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.05);color:var(--text);cursor:pointer;}
-      .btn:hover{filter:brightness(1.08);}
-      .btn.danger{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.14);}
+      .composer{
+        width:100%;
+        display:flex;
+        gap:12px;
+        align-items:flex-end;
+      }
 
-      .composer{width:100%;display:flex;gap:12px;align-items:flex-end;}
+      textarea{
+        flex:1;
+        min-height:56px;
+        max-height:160px;
+        resize:vertical;
+        padding:14px;
+        border-radius:14px;
+        border:2px solid rgba(76,111,255,.45);
+        background:rgba(0,0,0,.14);
+        color:var(--text);
+      }
 
-      textarea{flex:1;min-height:56px;max-height:160px;resize:vertical;padding:14px;border-radius:14px;border:2px solid rgba(76,111,255,.45);background:rgba(0,0,0,.14);color:var(--text);}
-      textarea:focus{border-color:rgba(76,111,255,.85);box-shadow:0 0 0 4px rgba(76,111,255,.16);outline:none;}
+      .send{
+        padding:14px 18px;
+        border-radius:14px;
+        background:rgba(76,111,255,.92);
+        color:white;
+        font-weight:750;
+        border:1px solid rgba(76,111,255,.35);
+        cursor:pointer;
+      }
 
-      .send{padding:14px 18px;border-radius:14px;background:rgba(76,111,255,.92);color:white;font-weight:750;border:1px solid rgba(76,111,255,.35);cursor:pointer;}
-      .send:hover{filter:brightness(1.06);}
-      .send:active{filter:brightness(.98);}
+      .footer{
+        padding:0 16px 14px;
+        font-size:12px;
+        color:var(--muted2);
+        display:flex;
+        gap:10px;
+        align-items:center;
+      }
 
-      .footer{padding:0 16px 14px;font-size:12px;color:var(--muted2);display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-      .kbd{padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);}
+      .kbd{
+        padding:2px 8px;
+        border-radius:999px;
+        background:rgba(255,255,255,.05);
+        border:1px solid rgba(255,255,255,.08);
+      }
+
       .spacer{flex:1;}
     </style>
   </head>
@@ -111,10 +239,11 @@
               ></textarea>
               <button id="sendBtn" class="send">Send</button>
             </div>
-                        <button
+
+            <button
               id="downloadNotesBtn"
               class="btn"
-              title="Downloads the evolving engineering decision log for this product: assumptions, requirements, equations, risks, and next steps."
+              title="Downloads the evolving engineering decision log"
             >
               Download engineering notes
             </button>
