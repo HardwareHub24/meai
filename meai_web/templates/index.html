@@ -209,6 +209,25 @@
       }
 
       .spacer{flex:1;}
+
+      /* ==========================
+         MOBILE + IFRAME FIXES (ADDED)
+         ========================== */
+
+      @media (max-width: 820px){
+        .wrap{max-width:100%; margin:10px auto 24px; padding:0 10px;}
+        .layout{flex-direction:column; gap:12px;}
+        .sidebar{width:100%; min-width:0;}
+        .chat{height:58vh; min-height:360px;}
+      }
+
+      /* Prefer dynamic viewport units when supported (mobile browser chrome) */
+      @supports (height: 1dvh){
+        .chat{height:62dvh;}
+        @media (max-width: 820px){
+          .chat{height:58dvh;}
+        }
+      }
     </style>
   </head>
 
