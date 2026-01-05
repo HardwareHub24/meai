@@ -1,4 +1,4 @@
-import os, time, traceback
+import os, time, traceback, sys
 from dotenv import load_dotenv
 from openai import OpenAI
 from supabase import create_client
@@ -12,6 +12,9 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 CORE_LIBRARY_DIR = os.getenv("CORE_LIBRARY_DIR")
 assert OPENAI_API_KEY and SUPABASE_URL and SUPABASE_SERVICE_KEY and CORE_LIBRARY_DIR, "Missing env vars"
 
+PROJECT_ROOT = os.path.dirname(__file__)
+SYSTEM_PDFS_DIR = os.path.join(PROJECT_ROOT, "docs", "system_pdfs")
+
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
@@ -21,6 +24,11 @@ BATCH_SIZE = 10
 SLEEP_SEC = 0.12
 
 EXCLUDED_DIR_NAMES = {"policies", "references"}  # do not ingest policy or license docs
+ONLY_FILES = None
+if "--only_files" in sys.argv:
+    i = sys.argv.index("--only_files")
+    if i + 1 < len(sys.argv):
+        ONLY_FILES = [s.strip() for s in sys.argv[i + 1].split(",") if s.strip()]
 
 def is_excluded_path(path: str) -> bool:
     norm = os.path.normpath(path)
@@ -70,34 +78,69 @@ def flush_batch(source_id, batch_text, batch_indices):
 
 def find_pdfs():
     pdfs = []
-    for root, _, files in os.walk(CORE_LIBRARY_DIR):
-        if is_excluded_path(root):
+    for base_dir in [CORE_LIBRARY_DIR, SYSTEM_PDFS_DIR]:
+        if not base_dir:
             continue
-        for f in files:
-            if f.lower().endswith(".pdf"):
-                full = os.path.join(root, f)
-                if not is_excluded_path(full):
-                    pdfs.append(full)
+        for root, _, files in os.walk(base_dir):
+            if is_excluded_path(root):
+                continue
+            for f in files:
+                if f.lower().endswith(".pdf"):
+                    full = os.path.join(root, f)
+                    if not is_excluded_path(full):
+                        pdfs.append(full)
     pdfs.sort()
     return pdfs
 
 pdfs = find_pdfs()
-print(f"Found PDFs (excluding {sorted(EXCLUDED_DIR_NAMES)}): {len(pdfs)}")
+if ONLY_FILES:
+    only_set = set(ONLY_FILES)
+    filtered = []
+    for p in pdfs:
+        base_dir = SYSTEM_PDFS_DIR if os.path.commonpath([p, SYSTEM_PDFS_DIR]) == SYSTEM_PDFS_DIR else CORE_LIBRARY_DIR
+        rel = os.path.normpath(os.path.relpath(p, base_dir))
+        if os.path.basename(p) in only_set or rel in only_set:
+            filtered.append(p)
+    pdfs = filtered
+abs_core_dir = os.path.abspath(CORE_LIBRARY_DIR)
+print(f"CORE_LIBRARY_DIR (resolved): {abs_core_dir}")
+print(f"SYSTEM_PDFS_DIR (resolved): {os.path.abspath(SYSTEM_PDFS_DIR)}")
+print(f"Found PDFs (excluding {sorted(EXCLUDED_DIR_NAMES)}): {len([p for p in pdfs if p.lower().endswith('.pdf')])}")
+for p in [p for p in pdfs if p.lower().endswith(".pdf")]:
+    print(os.path.basename(p))
+expected = {
+    "01_Project_Overview.pdf",
+    "02_System_Architecture.pdf",
+    "03_Tech_Stack.pdf",
+    "04_Env_and_Secrets.pdf",
+    "05_Database_Schema.pdf",
+    "06_Ingestion_Pipeline.pdf",
+    "07_Known_Issues.pdf",
+    "08_Runbook.pdf",
+    "09_Future_Roadmap.pdf",
+    "10_Glossary.pdf",
+}
+found = {os.path.basename(p) for p in pdfs if p.lower().endswith(".pdf")}
+missing = sorted(x for x in expected if x not in found)
+if missing:
+    print("WARNING: Missing expected files:")
+    for m in missing:
+        print(m)
 
 for pdf_path in pdfs:
-    source_id = os.path.relpath(pdf_path, CORE_LIBRARY_DIR)
+    base_dir = SYSTEM_PDFS_DIR if os.path.commonpath([pdf_path, SYSTEM_PDFS_DIR]) == SYSTEM_PDFS_DIR else CORE_LIBRARY_DIR
+    source_id = os.path.relpath(pdf_path, base_dir)
 
     try:
         print(f"\nProcessing: {source_id}")
         resume_at = get_resume_index(source_id)
         print(f"Resuming at chunk_index: {resume_at}")
 
-        reader = PdfReader(pdf_path)
-
         next_chunk_index = 0
         batch_text = []
         batch_indices = []
 
+        reader = PdfReader(pdf_path)
         for page_i, page in enumerate(reader.pages):
             page_text = (page.extract_text() or "").strip()
             if not page_text:

@@ -73,3 +73,17 @@ Codex should:
 2. Read the file being edited
 3. Respect locked rules above
 4. Ask before refactoring architecture
+
+---
+
+## Chat History (Web)
+Chat history is stored in Supabase via server-side routes and a temporary `user_id`
+stored in `localStorage` under `meai_user_id`.
+
+SQL migration: `docs/add_chat_history.sql`
+
+Endpoints:
+- `POST /api/chats`
+- `GET /api/chats?user_id=...`
+- `GET /api/chats/{chat_id}/messages?user_id=...`
+- `POST /api/chats/{chat_id}/messages`

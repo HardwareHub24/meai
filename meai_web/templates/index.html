@@ -6,69 +6,107 @@
     <title>ME AI Beta</title>
     <link rel="icon" href="/static/favicon.ico" />
 
-    <!-- Markdown + Math rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
       window.MathJax = {
         tex: {
           inlineMath: [["\\(", "\\)"]],
-          displayMath: [["\\[", "\\]"]]
-        }
+          displayMath: [["\\[", "\\]"]],
+        },
       };
     </script>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
     <style>
       :root{
-        --bg:#0b1220;
-        --panel:#0f1a2e;
-        --panel2:#0c1628;
-        --text:#e7eefc;
-        --muted:#9fb0d1;
+        /* Calm, professional Hardware Hub-aligned dark palette */
+        --bg:#0E1624;
+        --panel:#141E30;
+        --panel2:#101A2A;
+        --text:#E6ECF3;
+        --muted:#A9B4C7;
+        --muted2:#7F8BA3;
         --line:rgba(255,255,255,.08);
-        --blue:#3b6cff;
-        --purple:#7c4dff;
-        --bubbleA:#2a3448;
-        --bubbleU:#2f5bff;
+
+        /* Accent used sparingly */
+        --accent:#4C6FFF;
+        --accentHover:#6A84FF;
+        --accent2:#7C4DFF;
+
+        /* Chat bubbles */
+        --bubbleA:#1B2638;  /* assistant */
+        --bubbleU:#2A3F5F;  /* user, muted steel-blue */
         --shadow: 0 10px 30px rgba(0,0,0,.35);
         --radius:18px;
       }
+
       *{box-sizing:border-box}
       body{
         margin:0;
-        background: radial-gradient(1200px 600px at 20% 0%, #13284d 0%, var(--bg) 55%);
+        background: radial-gradient(1200px 600px at 20% 0%, #162640 0%, var(--bg) 55%);
         color:var(--text);
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       }
-      .topbar{
-        height:72px;
+
+      .wrap{max-width:1200px;margin:18px auto 40px;padding:0 18px;}
+      .layout{display:flex;gap:18px;align-items:stretch;}
+
+      .sidebar{
+        width:240px;
+        min-width:200px;
+        padding:14px;
         display:flex;
-        align-items:center;
-        padding:0 22px;
-        gap:14px;
-        border-bottom:1px solid var(--line);
-        background: linear-gradient(180deg, rgba(10,18,32,.9) 0%, rgba(10,18,32,.6) 100%);
-        position:sticky;
-        top:0;
-        z-index:10;
-        backdrop-filter: blur(10px);
+        flex-direction:column;
+        gap:12px;
       }
-      .logo{height:34px;width:auto;}
-      .title{font-size:22px;font-weight:800;letter-spacing:.5px;}
-      .wrap{max-width:1100px;margin:18px auto 40px;padding:0 18px;}
+      .sidebar h3{
+        margin:0;
+        font-size:14px;
+        letter-spacing:.4px;
+        color:var(--muted);
+        text-transform:uppercase;
+      }
+
+      .chat-list{
+        list-style:none;
+        margin:0;
+        padding:0;
+        display:flex;
+        flex-direction:column;
+        gap:8px;
+        overflow:auto;
+        max-height:62vh;
+      }
+      .chat-list li{
+        padding:8px 10px;
+        border-radius:10px;
+        border:1px solid var(--line);
+        cursor:pointer;
+        font-size:13px;
+        color:var(--text);
+        background:rgba(255,255,255,.03);
+      }
+      .chat-list li.active{
+        border-color:rgba(76,111,255,.55);
+        background:rgba(76,111,255,.14);
+      }
+
+      .chat-shell{flex:1;min-width:0;}
       .card{
-        background: linear-gradient(180deg, rgba(15,26,46,.92) 0%, rgba(12,22,40,.92) 100%);
+        background: linear-gradient(180deg, rgba(20,30,48,.92) 0%, rgba(16,26,42,.92) 100%);
         border:1px solid var(--line);
         border-radius:22px;
         box-shadow:var(--shadow);
         overflow:hidden;
       }
+
       .chat{
         height:62vh;
         min-height:420px;
         padding:18px;
         overflow:auto;
       }
+
       .bubble-row{display:flex;margin:10px 0;}
       .bubble-row.assistant{justify-content:flex-start;}
       .bubble-row.user{justify-content:flex-end;}
@@ -77,34 +115,47 @@
         max-width:min(760px, 86%);
         padding:12px 14px;
         border-radius:var(--radius);
-        line-height:1.35;
+        line-height:1.45;
         font-size:15px;
-        border:1px solid rgba(255,255,255,.08);
+        border:1px solid rgba(255,255,255,.06);
       }
+
       .bubble.assistant{
-        background:rgba(42,52,72,.92);
+        background:rgba(27,38,56,.92);
         border-top-left-radius:8px;
       }
+
       .bubble.user{
-        background:rgba(47,91,255,.92);
-        color:white;
+        background:rgba(42,63,95,.92);
+        color:#fff;
         border-top-right-radius:8px;
+        border-color:rgba(255,255,255,.05);
       }
+
+      /* Optional subtle accent edge instead of loud fills */
+      .bubble.user{
+        box-shadow: inset 3px 0 0 rgba(76,111,255,.55);
+      }
+
       .bubble.pending{
-        opacity:.8;
+        opacity:.82;
         font-style:italic;
+        color:var(--muted);
       }
 
       .bubble .md strong{font-weight:800;}
       .bubble .md ul{margin:8px 0 0 20px;}
+      .bubble .md a{color:var(--accent);text-decoration:underline;}
+      .bubble .md a:hover{color:var(--accentHover);}
 
       .citations{
         margin-top:10px;
         padding-top:8px;
         border-top:1px solid rgba(255,255,255,.08);
         font-size:12px;
-        color:var(--muted);
+        color:var(--muted2);
       }
+      .citations.muted{opacity:.9;}
 
       .controls{
         padding:14px 16px 16px;
@@ -114,11 +165,12 @@
         align-items:center;
         flex-wrap:wrap;
       }
+
       .btn{
         padding:10px 12px;
         border-radius:12px;
         border:1px solid rgba(255,255,255,.10);
-        background:rgba(255,255,255,.06);
+        background:rgba(255,255,255,.05);
         color:var(--text);
         cursor:pointer;
       }
@@ -134,6 +186,7 @@
         gap:12px;
         align-items:flex-end;
       }
+
       textarea{
         flex:1;
         min-height:56px;
@@ -141,29 +194,32 @@
         resize:vertical;
         padding:14px;
         border-radius:14px;
-        border:2px solid rgba(59,108,255,.55);
-        background:rgba(0,0,0,.15);
+        border:2px solid rgba(76,111,255,.45);
+        background:rgba(0,0,0,.14);
         color:var(--text);
       }
       textarea:focus{
-        border-color:rgba(59,108,255,.9);
-        box-shadow:0 0 0 4px rgba(59,108,255,.18);
+        border-color:rgba(76,111,255,.85);
+        box-shadow:0 0 0 4px rgba(76,111,255,.16);
         outline:none;
       }
+
       .send{
         padding:14px 18px;
         border-radius:14px;
-        background:rgba(124,77,255,.95);
+        background:rgba(76,111,255,.92);
         color:white;
-        font-weight:700;
-        border:1px solid rgba(124,77,255,.35);
+        font-weight:750;
+        border:1px solid rgba(76,111,255,.35);
         cursor:pointer;
       }
+      .send:hover{filter:brightness(1.06);}
+      .send:active{filter:brightness(.98);}
 
       .footer{
         padding:0 16px 14px;
         font-size:12px;
-        color:var(--muted);
+        color:var(--muted2);
         display:flex;
         gap:10px;
         align-items:center;
@@ -172,7 +228,7 @@
       .kbd{
         padding:2px 8px;
         border-radius:999px;
-        background:rgba(255,255,255,.06);
+        background:rgba(255,255,255,.05);
         border:1px solid rgba(255,255,255,.08);
       }
       .spacer{flex:1;}
@@ -180,46 +236,49 @@
   </head>
 
   <body>
-    <div class="topbar">
-      <img class="logo" src="/assets/Hardware%20Hub%20Logo,%20Full,%20Flat.png" />
-      <div class="title">ME AI Beta</div>
-    </div>
-
     <div class="wrap">
-      <div class="card">
-        <div id="chat" class="chat"></div>
-
-        <div class="controls">
-          <button
-            id="downloadNotesBtn"
-            class="btn"
-            title="Downloads the evolving engineering decision log for this product: assumptions, requirements, equations, risks, and next steps."
-          >
-            Download engineering notes
-          </button>
-
-          <button
-            id="clearChatBtn"
-            class="btn danger"
-            title="Clears the conversation and starts a brand new product session."
-          >
-            New Chat
-          </button>
-
-          <div class="composer">
-            <textarea
-              id="userInput"
-              placeholder="Type here. Enter sends. Shift+Enter adds a new line."
-            ></textarea>
-            <button id="sendBtn" class="send">Send</button>
-          </div>
+      <div class="layout">
+        <div class="card sidebar">
+          <h3>Chats</h3>
+          <button id="newChatBtn" class="btn">New Chat</button>
+          <ul id="chatList" class="chat-list"></ul>
         </div>
 
-        <div class="footer">
-          <div>Session: <span id="sessionId"></span></div>
-          <div class="spacer"></div>
-          <span class="kbd">Enter</span> send
-          <span class="kbd">Shift+Enter</span> newline
+        <div class="card chat-shell">
+          <div id="chat" class="chat"></div>
+
+          <div class="controls">
+            <button
+              id="downloadNotesBtn"
+              class="btn"
+              title="Downloads the evolving engineering decision log for this product: assumptions, requirements, equations, risks, and next steps."
+            >
+              Download engineering notes
+            </button>
+
+            <button
+              id="clearChatBtn"
+              class="btn danger"
+              title="Clears the conversation and starts a brand new product session."
+            >
+              New Chat
+            </button>
+
+            <div class="composer">
+              <textarea
+                id="userInput"
+                placeholder="Type here. Enter sends. Shift+Enter adds a new line."
+              ></textarea>
+              <button id="sendBtn" class="send">Send</button>
+            </div>
+          </div>
+
+          <div class="footer">
+            <div>Session: <span id="sessionId"></span></div>
+            <div class="spacer"></div>
+            <span class="kbd">Enter</span> send
+            <span class="kbd">Shift+Enter</span> newline
+          </div>
         </div>
       </div>
     </div>

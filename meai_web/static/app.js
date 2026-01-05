@@ -6,6 +6,8 @@ const elSend = document.getElementById("sendBtn");
 const elSessionLabel = document.getElementById("sessionId");
 const elBtnNotes = document.getElementById("downloadNotesBtn");
 const elBtnClear = document.getElementById("clearChatBtn");
+const elNewChat = document.getElementById("newChatBtn");
+const elChatList = document.getElementById("chatList");
 
 function uuidv4() {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -17,6 +19,10 @@ function uuidv4() {
 
 let sessionId = uuidv4();
 let inflight = false;
+let currentChatId = null;
+let chatList = [];
+const USER_ID_KEY = "meai_user_id";
+const userId = getOrCreateUserId();
 
 function setSession(id) {
   sessionId = id;
@@ -29,11 +35,28 @@ function scrollToBottom() {
   elChat.scrollTop = elChat.scrollHeight;
 }
 
+function getOrCreateUserId() {
+  try {
+    const existing = window.localStorage.getItem(USER_ID_KEY);
+    if (existing) return existing;
+    const id = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : uuidv4();
+    window.localStorage.setItem(USER_ID_KEY, id);
+    return id;
+  } catch {
+    return uuidv4();
+  }
+}
+
 function renderMarkdown(text) {
   const html = window.marked ? marked.parse(text || "") : (text || "");
   const div = document.createElement("div");
   div.className = "md";
   div.innerHTML = html;
+  // Ensure links in chat bubbles open in a new tab safely.
+  div.querySelectorAll("a").forEach((a) => {
+    a.setAttribute("target", "_blank");
+    a.setAttribute("rel", "noopener noreferrer");
+  });
   return div;
 }
 
@@ -212,6 +235,21 @@ async function sendMessage() {
   addThinking();
 
   try {
+    let activeChatId = currentChatId;
+    let historyOk = true;
+    if (!activeChatId) {
+      activeChatId = await createChat();
+      if (activeChatId) {
+        setActiveChat(activeChatId);
+        await refreshChatList({ preserveSelection: true });
+      } else {
+        historyOk = false;
+      }
+    }
+    if (historyOk && activeChatId) {
+      await appendMessage(activeChatId, "user", msg);
+    }
+
     const lower = msg.toLowerCase();
     if (lower.startsWith("solve:") || lower.startsWith("simplify:")) {
       const task = lower.startsWith("solve:") ? "solve" : "simplify";
@@ -227,6 +265,10 @@ async function sendMessage() {
       removeThinking();
       const out = data.result ?? data.error ?? "";
       addBubble("assistant", out);
+      if (historyOk && activeChatId) {
+        await appendMessage(activeChatId, "assistant", out || "");
+        await refreshChatList({ preserveSelection: true });
+      }
       return;
     }
 
@@ -252,6 +294,10 @@ async function sendMessage() {
       addBubble("assistant", `Error: ${detail}`);
     } else {
       addBubble("assistant", data.answer || "", data.citations || []);
+      if (historyOk && activeChatId) {
+        await appendMessage(activeChatId, "assistant", data.answer || "");
+        await refreshChatList({ preserveSelection: true });
+      }
     }
   } catch (e) {
     removeThinking();
@@ -284,9 +330,117 @@ if (elBtnNotes) {
 }
 
 if (elBtnClear) {
-  elBtnClear.addEventListener("click", () => {
-    elChat.innerHTML = "";
-    setSession(uuidv4());
-    elInput.focus();
+  elBtnClear.addEventListener("click", async () => {
+    const created = await newChat();
+    if (!created) {
+      elChat.innerHTML = "";
+      setSession(uuidv4());
+      elInput.focus();
+    }
   });
 }
+
+function setActiveChat(chatId) {
+  currentChatId = chatId;
+  if (chatId) setSession(chatId);
+  if (!elChatList) return;
+  elChatList.querySelectorAll("li").forEach((li) => {
+    li.classList.toggle("active", li.dataset.chatId === chatId);
+  });
+}
+
+function renderChatList(chats) {
+  if (!elChatList) return;
+  elChatList.innerHTML = "";
+  chats.forEach((chat) => {
+    const li = document.createElement("li");
+    li.textContent = chat.title || "New chat";
+    li.dataset.chatId = chat.id;
+    if (chat.id === currentChatId) {
+      li.classList.add("active");
+    }
+    li.addEventListener("click", () => {
+      loadChat(chat.id);
+    });
+    elChatList.appendChild(li);
+  });
+}
+
+async function refreshChatList({ preserveSelection } = {}) {
+  try {
+    const res = await fetch(`/api/chats?user_id=${encodeURIComponent(userId)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    chatList = data.chats || [];
+    renderChatList(chatList);
+    if (!preserveSelection && !currentChatId && chatList.length) {
+      await loadChat(chatList[0].id);
+    }
+  } catch {
+    // fallback to session-based chat
+  }
+}
+
+async function loadChat(chatId) {
+  try {
+    const res = await fetch(
+      `/api/chats/${encodeURIComponent(chatId)}/messages?user_id=${encodeURIComponent(userId)}`
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    const messages = data.messages || [];
+    elChat.innerHTML = "";
+    messages.forEach((msg) => {
+      const role = msg.role === "user" ? "user" : "assistant";
+      addBubble(role, msg.content || "", []);
+    });
+    setActiveChat(chatId);
+  } catch {
+    // fallback to session-based chat
+  }
+}
+
+async function createChat(title) {
+  try {
+    const res = await fetch("/api/chats", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, title }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.chat?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+async function appendMessage(chatId, role, content) {
+  try {
+    await fetch(`/api/chats/${encodeURIComponent(chatId)}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, role, content }),
+    });
+  } catch {
+    // ignore history write errors
+  }
+}
+
+async function newChat() {
+  const chatId = await createChat();
+  if (!chatId) return false;
+  setActiveChat(chatId);
+  await loadChat(chatId);
+  await refreshChatList({ preserveSelection: true });
+  if (elInput) elInput.focus();
+  return true;
+}
+
+if (elNewChat) {
+  elNewChat.addEventListener("click", () => {
+    newChat();
+  });
+}
+
+refreshChatList();

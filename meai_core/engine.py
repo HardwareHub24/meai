@@ -25,7 +25,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 assert OPENAI_API_KEY and SUPABASE_URL and SUPABASE_SERVICE_KEY, "Missing env vars"
-assert SUPABASE_SERVICE_KEY.startswith("ey"), "SUPABASE_SERVICE_KEY not loaded (expected JWT)"
+assert SUPABASE_SERVICE_KEY, "SUPABASE_SERVICE_KEY missing"
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 sb = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
